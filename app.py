@@ -1417,7 +1417,7 @@ if uploaded_files:
 
         with col_peak_1:
             st.markdown("### Max Requests / Second")
-            peak_sec = df_final["timestamp"].dt.floor("S").value_counts().nlargest(10).reset_index()
+            peak_sec = df_final["timestamp"].dt.floor("s").value_counts().nlargest(10).reset_index()
             peak_sec.columns = ["Time", "Requests"]
             peak_sec["Time Str"] = peak_sec["Time"].dt.strftime("%H:%M:%S")
 
