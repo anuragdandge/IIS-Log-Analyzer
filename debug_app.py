@@ -364,7 +364,7 @@ import pandas as pd
 import plotly.express as px
 
 # Page configuration
-st.set_page_config(page_title="IIS Log Analyzer", layout="wide", page_icon="🔮")
+st.set_page_config(page_title="MagicLog Analyzer", layout="wide", page_icon="🔮")
 
 st.title("🔮 IIS Log Analyzer")
 st.markdown("This dashboard focuses IIS traffic analysis.")
@@ -519,9 +519,6 @@ if uploaded_files:
 
         # Combined Identifier
         df_magic['full_flow_id'] = df_magic['extracted_app'] + " -> " + df_magic['decoded_arg']
-        
-        # Helper column for Date Grouping
-        df_magic['date_str'] = df_magic['timestamp'].dt.strftime('%Y-%m-%d')
 
         # --- 4. SIDEBAR DATE FILTER ---
         st.sidebar.divider()
@@ -554,7 +551,7 @@ if uploaded_files:
         st.divider()
 
          # --- SECTION C: HOURLY TRAFFIC ---
-        st.subheader("📈 Hourly Traffic Analysis")
+        st.subheader("📈 Hourly Traffic Analysis (Global)")
 
         df_final["hour"] = df_final["timestamp"].dt.floor("h")
         hourly_counts = df_final.groupby("hour").size().reset_index(name="requests")
@@ -583,7 +580,7 @@ if uploaded_files:
 
 
         # --- SECTION A: TOP COMBINED FLOWS ---
-        st.subheader("🏆 Top Magic Flows (Volume)")
+        st.subheader("🏆 Top Magic Flows (Global Volume)")
         
         flow_counts = df_final["full_flow_id"].value_counts().reset_index()
         flow_counts.columns = ["Flow Identifier", "Count"]
@@ -608,36 +605,11 @@ if uploaded_files:
         with col_flow_table:
             st.markdown("**Flow Statistics**")
             st.dataframe(top_flows, hide_index=True, width="stretch", height=400)
-            
-        # --- [NEW] SECTION A.1: TOP FLOWS BY DATE ---
-        st.subheader("📅 Top Flows Trends (Daily)")
-        st.markdown("Shows the daily volume of the **Top 10 Flows** to identify usage trends over time.")
-        
-        # 1. Identify Top 10 Flows overall
-        top_10_flow_names = flow_counts.head(10)["Flow Identifier"].tolist()
-        
-        # 2. Filter data for only these flows
-        df_top_flows = df_final[df_final["full_flow_id"].isin(top_10_flow_names)]
-        
-        # 3. Group by Date and Flow
-        daily_flow_counts = df_top_flows.groupby(['date_str', 'full_flow_id']).size().reset_index(name='Requests')
-        
-        # 4. Plot Stacked Bar Chart
-        fig_daily_flows = px.bar(
-            daily_flow_counts,
-            x="date_str",
-            y="Requests",
-            color="full_flow_id",
-            title="Top 10 Magic Flows by Date",
-            labels={"date_str": "Date", "full_flow_id": "Flow Name"},
-            barmode='stack'
-        )
-        st.plotly_chart(fig_daily_flows, width="stretch")
 
         st.divider()
 
-        # --- SECTION B: API PERFORMANCE ANALYSIS ---
-        st.subheader("⏱️ API Performance Analysis")
+        # --- SECTION B: API PERFORMANCE ANALYSIS (GLOBAL) ---
+        st.subheader("⏱️ API Performance Analysis (Global)")
         st.markdown("Execution time statistics per API Flow (in **Seconds**).")
 
         if "time-taken" in df_final.columns:
@@ -687,42 +659,13 @@ if uploaded_files:
                         "Max_Time": st.column_config.NumberColumn("Max (sec)", format="%.3f"),
                     }
                 )
-            
-            # --- [NEW] SECTION B.1: EXECUTION TIME PER DAY ---
-            st.subheader("📅 Daily Performance Trends (Latency)")
-            st.markdown("Tracks the **Min**, **Max**, and **Average** execution times per day (in Seconds).")
-            
-            # 1. Group by Date and Aggregate
-            daily_perf_trends = df_final.groupby('date_str')['time-taken'].agg(['min', 'max', 'mean']).reset_index()
-            
-            # 2. Convert to Seconds
-            daily_perf_trends['min'] = (daily_perf_trends['min'] / 1000).round(3)
-            daily_perf_trends['max'] = (daily_perf_trends['max'] / 1000).round(3)
-            daily_perf_trends['mean'] = (daily_perf_trends['mean'] / 1000).round(3)
-            
-            # 3. Melt for Plotly (to have multiple lines)
-            daily_perf_melted = daily_perf_trends.melt(id_vars='date_str', value_vars=['min', 'max', 'mean'], var_name='Metric', value_name='Time (sec)')
-            
-            # 4. Plot Line Chart
-            fig_daily_perf = px.line(
-                daily_perf_melted,
-                x='date_str',
-                y='Time (sec)',
-                color='Metric',
-                title="Daily Min/Max/Avg Execution Time",
-                markers=True,
-                labels={"date_str": "Date"}
-            )
-            st.plotly_chart(fig_daily_perf, width="stretch")
-
         else:
             st.warning("The 'time-taken' column was not found. Cannot calculate performance metrics.")
 
         st.divider()
 
-       
-        # --- SECTION D: PEAK LOAD ---
-        st.subheader("⚡ Peak Load Analysis")
+        # --- SECTION D: PEAK LOAD (GLOBAL) ---
+        st.subheader("⚡ Peak Load Analysis (Global)")
         col_peak_1, col_peak_2 = st.columns(2)
 
         with col_peak_1:
@@ -745,36 +688,79 @@ if uploaded_files:
             fig_peak_min.update_layout(yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig_peak_min, width="stretch")
 
-        # --- [NEW] SECTION D.1: DAILY LOAD INTENSITY ---
-        st.subheader("📅 Daily Load Intensity (Requests per Minute Stats)")
-        st.markdown("This chart analyzes the **Load Intensity** for each day. It calculates the requests per minute, then finds the **Highest (Max)**, **Lowest (Min)**, and **Average** load for that specific day.")
-        
-        # 1. Resample to 1-Minute buckets to get load
-        # Use simple floor and group, faster than set_index for large datasets
-        df_final['minute_bucket'] = df_final['timestamp'].dt.floor('min')
-        load_per_minute = df_final.groupby('minute_bucket').size().reset_index(name='req_count')
-        load_per_minute['date_str'] = load_per_minute['minute_bucket'].dt.strftime('%Y-%m-%d')
-        
-        # 2. Group by Date to get Min/Max/Avg of the minute buckets
-        daily_load_stats = load_per_minute.groupby('date_str')['req_count'].agg(['min', 'max', 'mean']).reset_index()
-        daily_load_stats['mean'] = daily_load_stats['mean'].round(1)
-        
-        # 3. Melt for visualization
-        daily_load_melted = daily_load_stats.melt(id_vars='date_str', value_vars=['min', 'max', 'mean'], var_name='Metric', value_name='Requests per Minute')
-        
-        # 4. Plot Trend Graph
-        fig_daily_load = px.line(
-            daily_load_melted,
-            x='date_str',
-            y='Requests per Minute',
-            color='Metric',
-            title="Daily Max/Min/Avg Requests per Minute",
-            markers=True,
-            labels={"date_str": "Date"}
-        )
-        # Add opacity styling
-        fig_daily_load.update_traces(opacity=0.8, line=dict(width=3))
-        st.plotly_chart(fig_daily_load, width="stretch")
+        st.divider()
+
+        # --- NEW SECTION: DAILY BREAKDOWN ---
+        st.header("📅 Daily Breakdown")
+        st.markdown("Detailed breakdown of **API Performance** and **Peak Load** for each specific date found in the logs.")
+
+        # Get sorted unique dates
+        unique_dates = sorted(df_final['timestamp'].dt.date.unique())
+
+        for single_date in unique_dates:
+            with st.expander(f"Analysis for {single_date}", expanded=True):
+                # Filter data for this date
+                df_day = df_final[df_final['timestamp'].dt.date == single_date].copy()
+                
+                # --- DAILY API PERFORMANCE ---
+                st.subheader(f"⏱️ API Performance - {single_date}")
+                if "time-taken" in df_day.columns and not df_day.empty:
+                    api_perf_day = df_day.groupby("full_flow_id")["time-taken"].agg(
+                        Min_Time="min",
+                        Max_Time="max",
+                        Avg_Time="mean",
+                        Request_Count="count"
+                    ).reset_index()
+                    
+                    cols_to_convert = ["Min_Time", "Max_Time", "Avg_Time"]
+                    for col in cols_to_convert:
+                        api_perf_day[col] = (api_perf_day[col] / 1000).round(3)
+
+                    col_d_perf_chart, col_d_perf_table = st.columns([2, 1])
+                    
+                    with col_d_perf_chart:
+                        slowest_apis_day = api_perf_day.sort_values("Avg_Time", ascending=False).head(10)
+                        fig_perf_day = px.bar(
+                            slowest_apis_day,
+                            x="Avg_Time",
+                            y="full_flow_id",
+                            orientation='h',
+                            title=f"Slowest APIs on {single_date}",
+                            labels={"Avg_Time": "Avg Time (s)", "full_flow_id": "API Flow"},
+                            text_auto=True,
+                            color="Avg_Time",
+                            color_continuous_scale="Reds"
+                        )
+                        fig_perf_day.update_layout(yaxis=dict(autorange="reversed"))
+                        st.plotly_chart(fig_perf_day, width="stretch", key=f"perf_chart_{single_date}")
+
+                    with col_d_perf_table:
+                        st.dataframe(api_perf_day, hide_index=True, width="stretch", height=300)
+
+                # --- DAILY PEAK LOAD ---
+                st.divider()
+                st.subheader(f"⚡ Peak Load - {single_date}")
+                col_d_peak_1, col_d_peak_2 = st.columns(2)
+                
+                with col_d_peak_1:
+                    peak_sec_day = df_day["timestamp"].dt.floor("s").value_counts().nlargest(5).reset_index()
+                    peak_sec_day.columns = ["Time", "Requests"]
+                    peak_sec_day["Time Str"] = peak_sec_day["Time"].dt.strftime("%H:%M:%S")
+                    
+                    fig_sec_day = px.bar(peak_sec_day, x="Requests", y="Time Str", orientation='h', text_auto=True, 
+                                         title="Max Req/Sec (Top 5)", color="Requests", color_continuous_scale="Reds")
+                    fig_sec_day.update_layout(yaxis=dict(autorange="reversed"))
+                    st.plotly_chart(fig_sec_day, width="stretch", key=f"sec_chart_{single_date}")
+
+                with col_d_peak_2:
+                    peak_min_day = df_day["timestamp"].dt.floor("min").value_counts().nlargest(5).reset_index()
+                    peak_min_day.columns = ["Time", "Requests"]
+                    peak_min_day["Time Str"] = peak_min_day["Time"].dt.strftime("%H:%M")
+                    
+                    fig_min_day = px.bar(peak_min_day, x="Requests", y="Time Str", orientation='h', text_auto=True, 
+                                         title="Max Req/Min (Top 5)", color="Requests", color_continuous_scale="Oranges")
+                    fig_min_day.update_layout(yaxis=dict(autorange="reversed"))
+                    st.plotly_chart(fig_min_day, width="stretch", key=f"min_chart_{single_date}")
 
         # --- SECTION E: DATA EXPLORER ---
         st.divider()
