@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from tracker import track_user
 
 # Page configuration
 st.set_page_config(page_title="MagicLog Analyzer", layout="wide", page_icon="🔮")
-
+track_user()
 st.title("🔮 IIS Log Analyzer")
 
 # --- NEW: FAQ & DOCUMENTATION SECTION ---

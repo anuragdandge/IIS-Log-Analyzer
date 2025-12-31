@@ -7,3 +7,8 @@
 /.gitignore
 /from 243
 /from 244
+/__pycache__
+/visitor_logs.csv
+/tracker.py
+/Admin_Panel.py
+/pages
